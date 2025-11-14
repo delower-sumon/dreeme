@@ -1,0 +1,1172 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>dreeme – Dream Journal & Interpretation</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <style>
+    :root {
+      color-scheme: light dark;
+    }
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+    }
+    .dream-gradient-bg {
+      background: radial-gradient(circle at top, rgba(255,255,255,0.35), transparent 55%),
+                  linear-gradient(to bottom, #f5e3e6, #d9e4f5);
+    }
+    .dark .dream-gradient-bg {
+      background: radial-gradient(circle at top, rgba(255,255,255,0.06), transparent 55%),
+                  radial-gradient(circle at bottom, rgba(129,140,248,0.25), transparent 60%),
+                  linear-gradient(to bottom, #020617, #020617, #030712);
+    }
+    .glow-button {
+      position: relative;
+      isolation: isolate;
+      border-radius: 9999px;
+      background: rgba(15,23,42,0.85);
+      color: white;
+      overflow: hidden;
+      box-shadow: 0 0 0 1px rgba(148,163,184,0.4);
+    }
+    .glow-button span {
+      position: relative;
+      z-index: 10;
+    }
+    .glow-button::before {
+      content: "";
+      position: absolute;
+      inset: -150%;
+      background: conic-gradient(from 0deg, #f9a8d4, #c4b5fd, #2dd4bf, #f9a8d4);
+      animation: glowing 6s linear infinite;
+      filter: blur(16px);
+      opacity: 0.7;
+    }
+    .glow-button::after {
+      content: "";
+      position: absolute;
+      inset: 2px;
+      border-radius: 9999px;
+      background: linear-gradient(to right, rgba(15,23,42,0.96), rgba(30,64,175,0.96));
+    }
+    .glow-button:hover::before {
+      opacity: 1;
+    }
+    .glow-button:hover::after {
+      background: linear-gradient(to right, rgba(30,64,175,0.98), rgba(99,102,241,0.98));
+    }
+    @keyframes glowing {
+      0% { transform: translate3d(-25%, -25%, 0) rotate(0deg); }
+      50% { transform: translate3d(25%, 25%, 0) rotate(180deg); }
+      100% { transform: translate3d(-25%, -25%, 0) rotate(360deg); }
+    }
+
+    .dream-border-glow {
+      position: relative;
+      border-radius: 1.25rem;
+      overflow: hidden;
+    }
+    .dream-border-glow::before {
+      content: "";
+      position: absolute;
+      inset: -1px;
+      padding: 1px;
+      border-radius: inherit;
+      background: conic-gradient(from 180deg, rgba(248,250,252,0.7), rgba(192,132,252,0.8), rgba(56,189,248,0.8), rgba(248,250,252,0.7));
+      mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+      -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+      mask-composite: exclude;
+      -webkit-mask-composite: xor;
+      animation: borderFlow 10s linear infinite;
+      opacity: 0.7;
+      pointer-events: none;
+    }
+    @keyframes borderFlow {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    .dream-border-inner {
+      position: relative;
+      border-radius: inherit;
+      background: rgba(15,23,42,0.82);
+      backdrop-filter: blur(18px);
+    }
+    .light .dream-border-inner {
+      background: rgba(255,255,255,0.85);
+    }
+
+    .hero-title-dreams {
+      display: inline-block;
+      background: linear-gradient(120deg, #a855f7, #f97316, #22d3ee);
+      background-size: 200% 200%;
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      animation: dreamsPulse 5s ease-in-out infinite;
+      text-shadow: 0 0 30px rgba(168,85,247,0.35);
+    }
+    @keyframes dreamsPulse {
+      0%, 100% { background-position: 0% 50%; transform: translateY(0); }
+      50% { background-position: 100% 50%; transform: translateY(-2px); }
+    }
+
+    .loader-pulse {
+      background: linear-gradient(90deg, rgba(148,163,184,0.18), rgba(148,163,184,0.35), rgba(148,163,184,0.18));
+      background-size: 200% 100%;
+      animation: shimmer 1.8s ease-in-out infinite;
+    }
+    @keyframes shimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+
+    .calendar-popover {
+      background: linear-gradient(to bottom, #E5BDF6, #D8DEDE);
+    }
+
+    .chart-bar {
+      background: linear-gradient(to top, #4f46e5, #a855f7);
+    }
+    .chart-bar-light {
+      background: linear-gradient(to top, #60a5fa, #c4b5fd);
+    }
+  </style>
+</head>
+<body class="dream-gradient-bg min-h-screen text-slate-900 dark:text-slate-100 transition-colors duration-500">
+  <div id="app" class="min-h-screen flex flex-col"></div>
+
+  <script>
+    const state = {
+      theme: 'light',
+      route: 'home',
+      isAuthed: false,
+      authTargetRoute: null,
+      showAuthModal: false,
+      journal: {
+        text: '',
+        date: new Date(),
+        moods: [],
+        hours: '',
+        interpreting: false,
+        interpretation: '',
+        interpreted: false,
+      },
+      dreams: [],
+      sharedDreams: [],
+      articles: [],
+      tracker: {},
+      voiceRecording: false,
+      speechRecognizer: null,
+    };
+
+    function formatDate(d) {
+      return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+    }
+
+    function ensureThemeClass() {
+      const html = document.documentElement;
+      html.dataset.theme = state.theme;
+      if (state.theme === 'dark') {
+        html.classList.add('dark');
+        html.classList.remove('light');
+      } else {
+        html.classList.add('light');
+        html.classList.remove('dark');
+      }
+    }
+
+    function navigate(route, options = {}) {
+      const protectedRoutes = ['journal', 'dreamspace', 'tracker'];
+      if (protectedRoutes.includes(route) && !state.isAuthed) {
+        state.authTargetRoute = route;
+        state.showAuthModal = true;
+      } else {
+        state.route = route;
+        if (options.fromAuth) {
+          if (route === 'home') state.route = 'journal';
+        }
+      }
+      render();
+    }
+
+    function mockSignIn() {
+      state.isAuthed = true;
+      const target = state.authTargetRoute || 'journal';
+      state.showAuthModal = false;
+      state.authTargetRoute = null;
+      if (!state.articles.length) initMockContent();
+      if (target === 'home') {
+        navigate('journal', { fromAuth: true });
+      } else {
+        navigate(target, { fromAuth: true });
+      }
+    }
+
+    function toggleTheme() {
+      state.theme = state.theme === 'light' ? 'dark' : 'light';
+      ensureThemeClass();
+      render();
+    }
+
+    function initMockContent() {
+      state.dreams = [];
+      state.sharedDreams = [];
+      const moods = ['Calm', 'Anxious', 'Inspired', 'Curious'];
+      for (let i = 0; i < 6; i++) {
+        const d = new Date();
+        d.setDate(d.getDate() - i * 2);
+        const dream = {
+          id: 'dream-' + i,
+          name: ['Ocean Temple', 'Starlit Forest', 'Soaring City', 'Hidden Library', 'Crystal River', 'Moonlit Garden'][i % 6],
+          date: d,
+          snippet: 'I was walking through a softly glowing place where time felt fluid and voices echoed like memories...',
+          moods: [moods[i % moods.length]],
+          hours: 6 + (i % 3),
+          text: 'I was walking through a softly glowing place where time felt fluid and voices echoed like memories...',
+          interpretation: 'This dream suggests your subconscious is exploring hidden layers of intuition and emotional processing, inviting you to trust your inner guidance.',
+          loved: false,
+          loves: 2 + i,
+        };
+        state.dreams.push(dream);
+        if (i % 2 === 0) {
+          state.sharedDreams.push({ ...dream, comments: [] });
+        }
+      }
+      const articleTitles = [
+        'Why Your Brain Loves Dreaming',
+        'The Science of Lucid Dreaming',
+        'Nightmares as Emotional Detox',
+        'Dream Rituals for Deeper Sleep',
+        'Symbols that Often Visit Our Dreams',
+        'How Journaling Shapes Your Dream World',
+        'The Psychology of Recurring Dreams',
+        'Healing Through Dream Imagery',
+        'Sleep, Memory & Creativity',
+        'Dreams Across Cultures',
+      ];
+      state.articles = articleTitles.map((t, idx) => ({
+        id: 'article-' + idx,
+        title: t,
+        preview: 'Explore how dreams mirror your emotional landscape and how gentle awareness can turn night visions into guiding lights.',
+        loves: 10 + idx,
+        loved: false,
+        comments: [],
+      }));
+      state.tracker = {
+        frequency: [3, 4, 2, 5, 3, 4, 6],
+        moods: [
+          { mood: 'Calm', count: 8 },
+          { mood: 'Anxious', count: 4 },
+          { mood: 'Curious', count: 6 },
+          { mood: 'Inspired', count: 5 },
+        ],
+        sleepVsDreams: [
+          { hours: 5, dreams: 2 },
+          { hours: 6, dreams: 3 },
+          { hours: 7, dreams: 4 },
+          { hours: 8, dreams: 5 },
+        ],
+      };
+    }
+
+    function startInterpretation() {
+      if (!state.journal.text.trim()) return;
+      state.journal.interpreting = true;
+      state.journal.interpreted = false;
+      state.journal.interpretation = '';
+      render();
+      const prefix = 'you are a master of dream(angelicdeepmind), your job is to describe what this dream might mean according to it\'s subjects, elements and emotional context, give the user a positive vibe telling the dream meaning, make the dream interpretation of this dream like a master angel dream interpreter that also thinks and speaks for humanity.';
+      const userText = state.journal.text.trim();
+      console.log('Mock API payload:', { system: prefix, user: userText });
+      setTimeout(() => {
+        state.journal.interpreting = false;
+        state.journal.interpreted = true;
+        state.journal.interpretation = 'Your dream weaves together subtle emotional threads, suggesting that a deep part of you is ready to release old tension and move toward a gentler, more purposeful phase. Notice the symbols that felt most alive—these often mirror talents, relationships, or decisions asking for your attention in waking life.';
+        render();
+      }, 1600);
+    }
+
+    function canSaveDream() {
+      const j = state.journal;
+      return (
+        !!j.text.trim() &&
+        !!j.date &&
+        j.moods.length > 0 &&
+        !!j.hours &&
+        j.interpreted &&
+        !!j.interpretation.trim()
+      );
+    }
+
+    function generateDreamName(text) {
+      const words = text
+        .replace(/[^a-zA-Z0-9\s]/g, ' ')
+        .split(/\s+/)
+        .filter(Boolean);
+      if (!words.length) return 'Untitled Dream';
+      const picked = words.slice(0, 3).map(w => w[0].toUpperCase() + w.slice(1).toLowerCase());
+      return picked.join(' ');
+    }
+
+    function saveDream() {
+      if (!canSaveDream()) return;
+      const j = state.journal;
+      const dream = {
+        id: 'dream-' + (state.dreams.length + 1) + '-' + Date.now(),
+        name: generateDreamName(j.text),
+        date: new Date(j.date),
+        moods: [...j.moods],
+        hours: j.hours,
+        text: j.text.trim(),
+        interpretation: j.interpretation.trim(),
+        snippet: j.text.trim().slice(0, 140) + (j.text.trim().length > 140 ? '…' : ''),
+        loves: 0,
+        loved: false,
+      };
+      state.dreams.unshift(dream);
+      state.journal.interpreted = true;
+      render();
+    }
+
+    function toggleLove(collection, id) {
+      const list = state[collection];
+      const item = list.find(x => x.id === id);
+      if (!item) return;
+      if (!state.isAuthed) {
+        state.authTargetRoute = state.route;
+        state.showAuthModal = true;
+        render();
+        return;
+      }
+      item.loved = !item.loved;
+      item.loves += item.loved ? 1 : -1;
+      render();
+    }
+
+    function shareDream(id) {
+      const dream = state.dreams.find(d => d.id === id);
+      if (!dream) return;
+      if (!state.sharedDreams.find(d => d.id === id)) {
+        state.sharedDreams.unshift({ ...dream, comments: [] });
+      }
+      state.route = 'dreamspace';
+      render();
+    }
+
+    function toggleVoiceRecording() {
+      if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+        alert('Voice input is not supported in this browser.');
+        return;
+      }
+      if (!state.speechRecognizer) {
+        const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+        const rec = new SR();
+        rec.lang = 'en-US';
+        rec.interimResults = true;
+        rec.continuous = false;
+        rec.onresult = (event) => {
+          let transcript = '';
+          for (let i = event.resultIndex; i < event.results.length; i++) {
+            transcript += event.results[i][0].transcript;
+          }
+          state.journal.text = (state.journal.text + ' ' + transcript).trim();
+          render();
+        };
+        rec.onend = () => {
+          state.voiceRecording = false;
+          render();
+        };
+        state.speechRecognizer = rec;
+      }
+      if (!state.voiceRecording) {
+        state.voiceRecording = true;
+        state.speechRecognizer.start();
+      } else {
+        state.voiceRecording = false;
+        state.speechRecognizer.stop();
+      }
+      render();
+    }
+
+    function moodPill(mood) {
+      const selected = state.journal.moods.includes(mood);
+      return `
+        <button
+          class="px-3 py-1 rounded-full border text-xs sm:text-sm transition-all duration-200 ${selected ? 'bg-violet-500 text-white border-violet-400 shadow-md shadow-violet-500/40' : 'bg-slate-900/30 dark:bg-slate-900/50 text-slate-200 border-slate-500/60 hover:border-violet-400 hover:text-violet-100'}"
+          onclick="toggleMood('${mood}')"
+        >
+          ${mood}
+        </button>
+      `;
+    }
+
+    function toggleMood(mood) {
+      const arr = state.journal.moods;
+      if (arr.includes(mood)) {
+        state.journal.moods = arr.filter(m => m !== mood);
+      } else {
+        if (arr.length >= 3) return;
+        state.journal.moods = [...arr, mood];
+      }
+      render();
+    }
+
+    function setJournalDateFromPicker(value) {
+      const d = new Date(value);
+      if (!isNaN(d.getTime())) {
+        state.journal.date = d;
+        render();
+      }
+    }
+
+    function renderHeader() {
+      const links = [
+        { id: 'home', label: 'Home' },
+        { id: 'journal', label: 'Journal', protected: true },
+        { id: 'dreamspace', label: 'DreamSpace', protected: true },
+        { id: 'tracker', label: 'Tracker', protected: true },
+        { id: 'pricing', label: 'Pricing' },
+        { id: 'about', label: 'About' },
+      ];
+      const navLinks = links.map(link => {
+        const active = state.route === link.id;
+        return `
+          <button
+            class="relative text-sm px-3 py-1.5 rounded-full transition-colors duration-200 ${active ? 'text-violet-200' : 'text-slate-200/80 hover:text-white'}"
+            onclick="navigate('${link.id}')"
+          >
+            ${link.label}
+            ${link.protected ? '<span class="ml-1 text-[10px] text-emerald-300/80 border border-emerald-300/60 rounded-full px-1">●</span>' : ''}
+          </button>
+        `;
+      }).join('');
+      const userInitial = state.isAuthed ? 'ID' : '?';
+      return `
+        <header class="sticky top-0 z-40 backdrop-blur-xl bg-slate-900/10 dark:bg-slate-950/10 border-b border-slate-800/40">
+          <div class="max-w-6xl mx-auto px-4 sm:px-6 flex items-center justify-between h-16">
+            <div class="flex items-center gap-3">
+              <div class="w-9 h-9 rounded-2xl bg-gradient-to-br from-violet-400 via-sky-300 to-emerald-300 shadow-lg shadow-violet-500/40 flex items-center justify-center text-slate-950 font-semibold text-sm">
+                dr
+              </div>
+              <div class="flex flex-col leading-tight">
+                <span class="text-sm font-semibold tracking-tight text-slate-50">dreeme</span>
+                <span class="text-[11px] text-slate-200/90">Dream journal & oracle</span>
+              </div>
+            </div>
+            <div class="hidden md:flex items-center gap-6">
+              <nav class="flex items-center gap-1.5 text-xs">
+                ${navLinks}
+              </nav>
+              <button
+                aria-label="Toggle theme"
+                class="w-9 h-9 rounded-full border border-slate-600/70 flex items-center justify-center text-slate-200 hover:border-violet-400 hover:text-violet-200 transition-colors"
+                onclick="toggleTheme()"
+              >
+                ${state.theme === 'light'
+                  ? '<span class="text-lg">☾</span>'
+                  : '<span class="text-lg">☼</span>'}
+              </button>
+              <button
+                class="ml-1 w-9 h-9 rounded-full bg-slate-900/80 border border-slate-700/80 flex items-center justify-center text-[11px] font-semibold text-slate-100 shadow-md shadow-slate-900/70"
+                onclick="${state.isAuthed ? 'navigate(\'journal\')' : 'openAuthFromHeader()'}"
+              >
+                ${userInitial}
+              </button>
+            </div>
+            <div class="md:hidden flex items-center gap-2">
+              <button
+                aria-label="Toggle theme"
+                class="w-8 h-8 rounded-full border border-slate-600/70 flex items-center justify-center text-slate-200 hover:border-violet-400 hover:text-violet-200 transition-colors text-xs"
+                onclick="toggleTheme()"
+              >
+                ${state.theme === 'light'
+                  ? '<span>☾</span>'
+                  : '<span>☼</span>'}
+              </button>
+              <button
+                class="w-8 h-8 rounded-full bg-slate-900/80 border border-slate-700/80 flex items-center justify-center text-[10px] font-semibold text-slate-100"
+                onclick="${state.isAuthed ? 'navigate(\'journal\')' : 'openAuthFromHeader()'}"
+              >
+                ${userInitial}
+              </button>
+            </div>
+          </div>
+          <div class="md:hidden border-t border-slate-800/70 bg-slate-900/70">
+            <div class="max-w-6xl mx-auto px-4 py-2 flex flex-wrap gap-1.5">
+              ${navLinks}
+            </div>
+          </div>
+        </header>
+      `;
+    }
+
+    function openAuthFromHeader() {
+      state.authTargetRoute = 'journal';
+      state.showAuthModal = true;
+      render();
+    }
+
+    function renderHero() {
+      return `
+        <section class="relative max-w-6xl mx-auto px-4 sm:px-6 pt-10 pb-12 sm:pt-16 sm:pb-16 flex flex-col lg:flex-row items-center gap-10">
+          <div class="absolute inset-0 pointer-events-none">
+            <div class="absolute -top-16 -left-16 w-64 h-64 bg-violet-500/25 blur-3xl rounded-full"></div>
+            <div class="absolute -bottom-10 -right-10 w-72 h-72 bg-sky-400/25 blur-3xl rounded-full"></div>
+          </div>
+          <div class="relative z-10 flex-1">
+            <div class="inline-flex items-center gap-2 rounded-full border border-violet-300/60 bg-slate-900/10 dark:bg-slate-900/40 px-2.5 py-1 text-[11px] text-violet-50 shadow-sm shadow-violet-500/30 mb-4">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-pulse"></span>
+              <span>Nightly reflections • Gentle AI interpretations</span>
+            </div>
+            <h1 class="text-3xl sm:text-4xl lg:text-5xl font-semibold tracking-tight text-slate-900 dark:text-slate-50">
+              Unlock the Wisdom of Your <span class="hero-title-dreams">Dreams</span>
+            </h1>
+            <p class="mt-4 text-sm sm:text-base text-slate-600 dark:text-slate-300 max-w-xl">
+              Capture your dreams the moment you wake, and let an angelic, human-centered AI help you uncover
+              the symbols, emotions, and gentle guidance hidden in every night story.
+            </p>
+            <div class="mt-6 flex flex-wrap gap-3">
+              <button
+                class="glow-button px-5 py-2.5 text-sm font-medium"
+                onclick="openCtaAuth('journal')"
+              >
+                <span class="flex items-center gap-2">
+                  Start Dream Journal
+                  <span class="text-xs">↗</span>
+                </span>
+              </button>
+              <button
+                class="glow-button px-5 py-2.5 text-sm font-medium bg-transparent text-slate-100"
+                onclick="openCtaAuth('dreamspace')"
+              >
+                <span class="flex items-center gap-2">
+                  DreamSpace
+                  <span class="text-xs">✦</span>
+                </span>
+              </button>
+            </div>
+            <div class="mt-6 flex flex-wrap items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
+              <div class="flex -space-x-2">
+                <div class="w-6 h-6 rounded-full bg-gradient-to-tr from-fuchsia-400 to-sky-300 border border-slate-900"></div>
+                <div class="w-6 h-6 rounded-full bg-gradient-to-tr from-emerald-400 to-cyan-300 border border-slate-900"></div>
+                <div class="w-6 h-6 rounded-full bg-gradient-to-tr from-violet-400 to-indigo-400 border border-slate-900 flex items-center justify-center text-[9px] text-slate-950 font-semibold">+9k</div>
+              </div>
+              <span>Dreamers already journaling with dreeme.</span>
+            </div>
+          </div>
+          <div class="relative z-10 flex-1 max-w-md w-full">
+            <div class="dream-border-glow">
+              <div class="dream-border-inner p-4 sm:p-5 text-xs sm:text-sm text-slate-200">
+                <div class="flex items-center justify-between text-[11px] text-slate-300 mb-2">
+                  <span>Tonight&apos;s reflection</span>
+                  <span class="text-emerald-300 flex items-center gap-1">
+                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-pulse"></span>
+                    AI Oracle ready
+                  </span>
+                </div>
+                <div class="rounded-xl bg-slate-900/70 border border-slate-700/80 p-3 mb-3">
+                  <p class="text-[11px] text-slate-300">
+                    &ldquo;I was walking through a city floating among the clouds, every step lighting up the path beneath my feet...&rdquo;
+                  </p>
+                </div>
+                <div class="rounded-xl bg-slate-900/70 border border-violet-500/60 p-3 flex flex-col gap-1">
+                  <div class="text-[11px] text-violet-200 flex items-center gap-2 mb-1">
+                    <span class="w-1 h-5 bg-gradient-to-b from-violet-300 to-sky-300 rounded-full"></span>
+                    <span>Angelic AI Interpretation</span>
+                  </div>
+                  <p class="text-[11px] text-slate-200">
+                    Floating above the world hints at gaining perspective. The glowing path suggests you&apos;re ready to trust a gentler, more luminous direction in waking life.
+                  </p>
+                </div>
+                <div class="mt-3 flex items-center justify-between text-[10px] text-slate-400">
+                  <span>Encrypted, private by default</span>
+                  <span class="flex items-center gap-1">
+                    <span class="w-1.5 h-1.5 rounded-full bg-violet-400"></span>
+                    Send to DreamSpace
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      `;
+    }
+
+    function openCtaAuth(target) {
+      if (state.isAuthed) {
+        navigate(target);
+      } else {
+        state.authTargetRoute = target;
+        state.showAuthModal = true;
+        render();
+      }
+    }
+
+    function renderFeatures() {
+      const features = [
+        {
+          title: 'Track, Remember, Evolve',
+          body: 'Build a nightly habit with gentle reminders, rich entries, and a timeline that reveals how your inner world shifts over time.',
+        },
+        {
+          title: 'Angel-Guided AI Interpreter',
+          body: 'A carefully tuned AI, prefixed with an angelic, human-first prompt, offers reflections with warmth—not cold predictions.',
+        },
+        {
+          title: 'Dream Journal Canvas',
+          body: 'Write or speak your dreams, tag moods, track sleep hours, and watch patterns emerge across weeks and months.',
+        },
+        {
+          title: 'DreamSpace Community',
+          body: 'Share selected dreams anonymously, react with love, and learn from a constellation of other dreamers.',
+        },
+        {
+          title: 'Visual Dream Tracker',
+          body: 'See trends across time: recurring moods, frequencies, and how sleep depth shifts the tone of your dream world.',
+        },
+        {
+          title: 'Curated Dream Library',
+          body: 'Admin-curated articles explore psychological and spiritual perspectives on dreaming, sleep health, and creativity.',
+        },
+      ];
+      const cards = features.map((f, idx) => `
+        <article class="relative group rounded-2xl border border-slate-100/60 dark:border-slate-800/80 bg-gradient-to-b from-white/80 to-slate-50/60 dark:from-slate-900/80 dark:to-slate-950/80 shadow-sm shadow-violet-500/10 overflow-hidden">
+          <div class="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-gradient-to-br from-fuchsia-500/10 via-sky-400/10 to-emerald-300/10"></div>
+          <div class="relative p-4 sm:p-5 flex flex-col gap-2">
+            <div class="flex items-center justify-between">
+              <h3 class="text-sm font-semibold text-slate-900 dark:text-slate-50">${f.title}</h3>
+              <span class="text-[11px] text-violet-500/80 dark:text-violet-300/80">0${idx + 1}</span>
+            </div>
+            <p class="text-xs text-slate-600 dark:text-slate-300">${f.body}</p>
+            <div class="mt-1 flex items-center gap-1 text-[10px] text-violet-500/80">
+              <span class="w-1 h-1 rounded-full bg-violet-400"></span>
+              <span>Dream-friendly gradients & micro-animations built-in</span>
+            </div>
+          </div>
+        </article>
+      `).join('');
+      return `
+        <section class="max-w-6xl mx-auto px-4 sm:px-6 pb-14">
+          <div class="flex flex-col sm:flex-row items-start sm:items-end justify-between gap-4 mb-6">
+            <div>
+              <h2 class="text-lg sm:text-xl font-semibold text-slate-900 dark:text-slate-50">Designed for gentle, nightly rituals</h2>
+              <p class="mt-1 text-xs sm:text-sm text-slate-600 dark:text-slate-300 max-w-xl">
+                iDremify pairs a warm interface with powerful tooling—so you can simply wake, capture, interpret, and
+                slowly reconnect with the wisdom your dreams are already offering.
+              </p>
+            </div>
+            <div class="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-2">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-300"></span>
+              <span>Private first • Optional sharing • Stripe-ready pricing</span>
+            </div>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            ${cards}
+          </div>
+        </section>
+      `;
+    }
+
+    function renderHome() {
+      return `
+        ${renderHero()}
+        ${renderFeatures()}
+      `;
+    }
+
+    function renderJournal() {
+      const j = state.journal;
+      const moods = ['Calm', 'Anxious', 'Inspired', 'Curious', 'Joyful', 'Uneasy', 'Grateful'];
+      const moodPills = moods.map(moodPill).join('');
+      const interpreting = j.interpreting;
+      const interpretationContent = interpreting
+        ? `<div class="h-24 rounded-xl loader-pulse"></div>`
+        : j.interpretation
+          ? `<div class="text-xs sm:text-sm leading-relaxed text-slate-200 dark:text-slate-100">${j.interpretation}</div>`
+          : `<div class="text-[11px] text-slate-400">Your angelic dream interpreter will appear here with a soft, human-centered reflection once you click <span class="text-violet-300">Interpret</span>.</div>`;
+      const saved = state.dreams.map(d => `
+        <article class="rounded-xl border border-slate-200/60 dark:border-slate-800/80 bg-white/70 dark:bg-slate-950/80 p-3 flex flex-col gap-1 text-xs">
+          <div class="flex items-center justify-between gap-2">
+            <h3 class="text-xs font-semibold text-slate-900 dark:text-slate-50 truncate">${d.name}</h3>
+            <span class="text-[10px] text-slate-500">${formatDate(d.date)}</span>
+          </div>
+          <p class="text-[11px] text-slate-600 dark:text-slate-300 line-clamp-2">${d.snippet}</p>
+          <div class="mt-1 flex items-center justify-between text-[10px] text-slate-500">
+            <div class="flex items-center gap-1">
+              ${d.moods.map(m => `<span class="px-1.5 py-0.5 rounded-full bg-violet-500/10 text-violet-400 border border-violet-400/30">${m}</span>`).join('')}
+            </div>
+            <div class="flex items-center gap-2">
+              <button class="flex items-center gap-1 text-rose-400" onclick="toggleLove('dreams', '${d.id}')">
+                <span>${d.loved ? '♥' : '♡'}</span>
+                <span>${d.loves}</span>
+              </button>
+              <button class="text-violet-400 hover:text-violet-200" onclick="shareDream('${d.id}')">Share</button>
+            </div>
+          </div>
+        </article>
+      `).join('');
+      return `
+        <main class="max-w-6xl mx-auto px-4 sm:px-6 pt-10 pb-16">
+          <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
+            <div>
+              <h1 class="text-xl sm:text-2xl font-semibold text-slate-900 dark:text-slate-50">Journal</h1>
+              <p class="text-xs sm:text-sm text-slate-600 dark:text-slate-300">Capture your dreams, moods, and sleep—then invite an angelic AI to gently interpret what&apos;s stirring beneath.</p>
+            </div>
+            <div class="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-3">
+              <span>${formatDate(j.date)}</span>
+              <span class="w-1 h-1 rounded-full bg-violet-400"></span>
+              <span class="flex items-center gap-1"><span class="text-emerald-300">●</span> Private by default</span>
+            </div>
+          </div>
+          <div class="grid lg:grid-cols-2 gap-6 items-start">
+            <section class="dream-border-glow">
+              <div class="dream-border-inner p-4 sm:p-5">
+                <div class="flex items-center justify-between mb-3">
+                  <div class="flex flex-col">
+                    <span class="text-xs font-medium text-slate-100 light:text-slate-900">Dream Notes</span>
+                    <span class="text-[11px] text-slate-400">Describe what you remember, in your own words.</span>
+                  </div>
+                  <div class="flex items-center gap-2 text-[11px] text-slate-300">
+                    <label class="flex items-center gap-1 cursor-pointer">
+                      <span>Date</span>
+                      <input
+                        type="date"
+                        class="bg-slate-900/60 text-[11px] rounded-md border border-slate-600 px-1.5 py-0.5 focus:outline-none focus:border-violet-400"
+                        value="${new Date(j.date).toISOString().slice(0,10)}"
+                        onchange="setJournalDateFromPicker(this.value)"
+                      />
+                    </label>
+                    <div class="w-px h-5 bg-slate-600/70"></div>
+                    <button
+                      class="flex items-center gap-1 text-emerald-300 border border-emerald-400/50 rounded-full px-2 py-0.5 hover:bg-emerald-500/10"
+                      onclick="toggleVoiceRecording()"
+                    >
+                      <span class="text-[10px]">${state.voiceRecording ? 'Listening…' : 'Voice input'}</span>
+                    </button>
+                  </div>
+                </div>
+                <div class="rounded-xl bg-slate-900/70 light:bg-white/80 border border-slate-700/80 light:border-slate-200/80 overflow-hidden mb-3">
+                  <textarea
+                    class="w-full bg-transparent text-xs sm:text-sm text-slate-100 light:text-slate-900 placeholder:text-slate-500/70 px-3 py-3 min-h-[140px] focus:outline-none"
+                    placeholder="Write your dream here…"
+                    oninput="state.journal.text = this.value; render();"
+                  >${j.text.replace(/</g, '&lt;')}</textarea>
+                </div>
+                <div class="flex flex-wrap items-center gap-3 mb-3 text-[11px] text-slate-300">
+                  <div class="flex flex-col gap-1">
+                    <span class="text-[11px]">Moods</span>
+                    <div class="flex flex-wrap gap-1.5">
+                      ${moodPills}
+                    </div>
+                  </div>
+                  <div class="h-8 w-px bg-slate-700/80 mx-1"></div>
+                  <div class="flex flex-col gap-1">
+                    <label class="text-[11px]" for="hoursSleep">Hours slept</label>
+                    <input
+                      id="hoursSleep"
+                      type="number"
+                      min="0"
+                      max="16"
+                      step="0.5"
+                      value="${j.hours}"
+                      class="w-20 bg-slate-900/70 light:bg-white/80 text-[11px] rounded-md border border-slate-600 px-2 py-1 focus:outline-none focus:border-violet-400"
+                      oninput="state.journal.hours = this.value; render();"
+                    />
+                  </div>
+                </div>
+              </div>
+            </section>
+            <section class="dream-border-glow">
+              <div class="dream-border-inner p-4 sm:p-5 flex flex-col h-full">
+                <div class="flex items-center justify-between mb-3">
+                  <div class="flex flex-col">
+                    <span class="text-xs font-medium text-slate-100 light:text-slate-900">Interpreter</span>
+                    <span class="text-[11px] text-slate-400">A master angel dream interpreter tuned to positive, human-centered insights.</span>
+                  </div>
+                  <button
+                    class="glow-button px-4 py-1.5 text-xs font-medium disabled:opacity-40 disabled:cursor-not-allowed"
+                    onclick="startInterpretation()"
+                    ${!j.text.trim() || interpreting ? 'disabled' : ''}
+                  >
+                    <span class="flex items-center gap-1.5">
+                      Interpret
+                      <span>➜</span>
+                    </span>
+                  </button>
+                </div>
+                <div class="flex-1 rounded-xl bg-slate-900/70 light:bg-white/90 border border-violet-500/60 p-3 overflow-y-auto min-h-[140px]">
+                  ${interpretationContent}
+                </div>
+                <div class="mt-3 flex items-center justify-between gap-3">
+                  <button
+                    class="glow-button px-4 py-1.5 text-xs font-medium disabled:opacity-40 disabled:cursor-not-allowed"
+                    onclick="saveDream()"
+                    ${canSaveDream() ? '' : 'disabled'}
+                  >
+                    <span class="flex items-center gap-1.5">
+                      <span>💾</span>
+                      Save Dream
+                    </span>
+                  </button>
+                  <div class="text-[10px] text-slate-400 flex items-center gap-2">
+                    <span class="w-1 h-1 rounded-full bg-emerald-300"></span>
+                    <span>Securely stored to your account · Stripe-ready limits</span>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+          <section class="mt-8">
+            <div class="flex items-center justify-between mb-3">
+              <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-50">Saved dreams</h2>
+              <span class="text-[11px] text-slate-500">${state.dreams.length} saved entries</span>
+            </div>
+            <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              ${saved || '<p class="text-xs text-slate-500">Your saved dreams will appear here after you start journaling.</p>'}
+            </div>
+          </section>
+        </main>
+      `;
+    }
+
+    function renderDreamSpace() {
+      const dreams = state.sharedDreams.map(d => `
+        <article class="rounded-2xl border border-slate-200/60 dark:border-slate-800/80 bg-white/70 dark:bg-slate-950/80 p-4 flex flex-col gap-2 text-xs">
+          <div class="flex items-center justify-between gap-2">
+            <div>
+              <h3 class="text-sm font-semibold text-slate-900 dark:text-slate-50">${d.name}</h3>
+              <p class="text-[11px] text-slate-500">${formatDate(d.date)}</p>
+            </div>
+            <button class="flex items-center gap-1 text-rose-500 text-[11px]" onclick="toggleLove('sharedDreams', '${d.id}')">
+              <span>${d.loved ? '♥' : '♡'}</span>
+              <span>${d.loves}</span>
+            </button>
+          </div>
+          <p class="text-[11px] text-slate-700 dark:text-slate-200">${d.text}</p>
+          <div class="mt-1 flex items-center justify-between text-[10px] text-slate-500">
+            <div class="flex items-center gap-1">
+              ${d.moods.map(m => `<span class="px-1.5 py-0.5 rounded-full bg-violet-500/10 text-violet-400 border border-violet-400/30">${m}</span>`).join('')}
+            </div>
+            <span>${d.hours}h sleep</span>
+          </div>
+        </article>
+      `).join('');
+      const articleCards = state.articles.map(a => `
+        <article class="rounded-2xl border border-slate-200/60 dark:border-slate-800/80 bg-gradient-to-b from-white/80 to-slate-50/80 dark:from-slate-900/90 dark:to-slate-950/90 p-4 flex flex-col gap-2 text-xs">
+          <div class="flex items-center justify-between gap-2">
+            <h3 class="text-sm font-semibold text-slate-900 dark:text-slate-50">${a.title}</h3>
+            <button class="flex items-center gap-1 text-rose-500 text-[11px]" onclick="toggleLove('articles', '${a.id}')">
+              <span>${a.loved ? '♥' : '♡'}</span>
+              <span>${a.loves}</span>
+            </button>
+          </div>
+          <p class="text-[11px] text-slate-700 dark:text-slate-200">${a.preview}</p>
+          <div class="mt-1 flex items-center justify-between text-[10px] text-slate-500">
+            <span>Admin article • Learn & integrate</span>
+            <button class="text-violet-500 hover:text-violet-300">Share</button>
+          </div>
+        </article>
+      `).join('');
+      return `
+        <main class="max-w-6xl mx-auto px-4 sm:px-6 pt-10 pb-16">
+          <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
+            <div>
+              <h1 class="text-xl sm:text-2xl font-semibold text-slate-50">DreamSpace</h1>
+              <p class="text-xs sm:text-sm text-slate-300 max-w-xl">Browse anonymised dreams from the community, offer gentle reactions, and read curated articles about sleep, symbols and emotional healing.</p>
+            </div>
+            <div class="text-[11px] text-slate-400 flex items-center gap-2">
+              <span class="w-1.5 h-1.5 rounded-full bg-rose-400"></span>
+              <span>Love-react, comment & share (prototype UI)</span>
+            </div>
+          </div>
+          <div class="grid lg:grid-cols-3 gap-6 items-start">
+            <section class="lg:col-span-2 flex flex-col gap-3">
+              <h2 class="text-sm font-semibold text-slate-100">Shared dreams</h2>
+              ${dreams || '<p class="text-xs text-slate-300">Shared dreams will appear here once you publish from your journal.</p>'}
+            </section>
+            <section class="flex flex-col gap-3">
+              <h2 class="text-sm font-semibold text-slate-100">Dream articles</h2>
+              ${articleCards}
+            </section>
+          </div>
+        </main>
+      `;
+    }
+
+    function renderTracker() {
+      const t = state.tracker;
+      const freqBars = t.frequency.map((val, idx) => {
+        const max = Math.max(...t.frequency);
+        const height = (val / max) * 100;
+        return `
+          <div class="flex flex-col items-center gap-1 flex-1">
+            <div class="w-5 sm:w-6 rounded-full ${state.theme === 'light' ? 'chart-bar-light' : 'chart-bar'}" style="height:${height || 5}%"></div>
+            <span class="text-[10px] text-slate-500">D${idx + 1}</span>
+          </div>
+        `;
+      }).join('');
+      const moodBars = t.moods.map(m => {
+        const max = Math.max(...t.moods.map(x => x.count));
+        const w = (m.count / max) * 100;
+        return `
+          <div class="flex items-center gap-2 text-[11px]">
+            <span class="w-16 text-slate-500">${m.mood}</span>
+            <div class="flex-1 h-2 rounded-full bg-slate-800/60 overflow-hidden">
+              <div class="h-full bg-gradient-to-r from-violet-400 to-sky-400" style="width:${w || 5}%"></div>
+            </div>
+            <span class="w-6 text-right text-slate-400">${m.count}</span>
+          </div>
+        `;
+      }).join('');
+      const sleepDots = t.sleepVsDreams.map(pair => {
+        const maxH = Math.max(...t.sleepVsDreams.map(x => x.hours));
+        const maxD = Math.max(...t.sleepVsDreams.map(x => x.dreams));
+        const x = (pair.hours / maxH) * 100;
+        const y = (pair.dreams / maxD) * 100;
+        return `<div class="absolute w-2 h-2 rounded-full bg-emerald-300" style="left:${x}%; bottom:${y}%; transform:translate(-50%,50%);"></div>`;
+      }).join('');
+      const trackerArticles = state.articles.slice(0, 9).map(a => `
+        <article class="rounded-xl border border-slate-200/60 dark:border-slate-800/80 bg-white/80 dark:bg-slate-950/90 p-3 flex flex-col gap-1 text-xs">
+          <h3 class="text-xs font-semibold text-slate-900 dark:text-slate-50">${a.title}</h3>
+          <p class="text-[11px] text-slate-600 dark:text-slate-300 line-clamp-2">${a.preview}</p>
+        </article>
+      `).join('');
+      return `
+        <main class="max-w-6xl mx-auto px-4 sm:px-6 pt-10 pb-16">
+          <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
+            <div>
+              <h1 class="text-xl sm:text-2xl font-semibold text-slate-50">Tracker</h1>
+              <p class="text-xs sm:text-sm text-slate-300 max-w-xl">Visualise how often you dream, which moods visit you most, and how sleep depth shapes your inner night-time cinema.</p>
+            </div>
+            <div class="text-[11px] text-slate-400 flex items-center gap-2">
+              <span class="w-1.5 h-1.5 rounded-full bg-sky-400"></span>
+              <span>Prototype charts driven by your saved dream data</span>
+            </div>
+          </div>
+          <div class="grid lg:grid-cols-3 gap-6 items-start">
+            <section class="lg:col-span-2 flex flex-col gap-4">
+              <div class="rounded-2xl border border-slate-800/80 bg-slate-950/80 p-4">
+                <h2 class="text-xs font-semibold text-slate-100 mb-2">Dream frequency (last 7 nights)</h2>
+                <div class="flex items-end gap-2 h-32">
+                  ${freqBars}
+                </div>
+              </div>
+              <div class="rounded-2xl border border-slate-800/80 bg-slate-950/80 p-4 flex flex-col gap-3">
+                <h2 class="text-xs font-semibold text-slate-100">Most visited moods</h2>
+                ${moodBars}
+              </div>
+              <div class="rounded-2xl border border-slate-800/80 bg-slate-950/80 p-4">
+                <h2 class="text-xs font-semibold text-slate-100 mb-2">Sleep hours vs dream count</h2>
+                <div class="relative h-28 border border-slate-700/80 rounded-xl overflow-hidden bg-slate-900/80">
+                  ${sleepDots}
+                </div>
+              </div>
+            </section>
+            <section class="flex flex-col gap-3">
+              <h2 class="text-sm font-semibold text-slate-100">Dream health articles</h2>
+              <div class="flex flex-col gap-2 max-h-[480px] overflow-y-auto pr-1">
+                ${trackerArticles}
+              </div>
+            </section>
+          </div>
+        </main>
+      `;
+    }
+
+    function renderPricing() {
+      return `
+        <main class="max-w-4xl mx-auto px-4 sm:px-6 pt-10 pb-16">
+          <div class="text-center mb-8">
+            <h1 class="text-xl sm:text-2xl font-semibold text-slate-900 dark:text-slate-50">Pricing</h1>
+            <p class="mt-2 text-xs sm:text-sm text-slate-600 dark:text-slate-300 max-w-xl mx-auto">Start free, grow into deeper tracking and unlimited history when you&apos;re ready. Stripe-powered payments keep your subscription secure.</p>
+          </div>
+          <div class="grid md:grid-cols-3 gap-4 items-stretch">
+            <article class="rounded-2xl border border-slate-200/80 dark:border-slate-800/80 bg-white/80 dark:bg-slate-950/90 p-4 flex flex-col gap-3">
+              <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-50">Free</h2>
+              <p class="text-xs text-slate-600 dark:text-slate-300">Perfect to start your nightly ritual.</p>
+              <div class="text-2xl font-semibold text-slate-900 dark:text-slate-50">$0<span class="text-xs font-normal text-slate-500"> / forever</span></div>
+              <ul class="text-xs text-slate-600 dark:text-slate-300 space-y-1">
+                <li>• Up to 100 dreams stored</li>
+                <li>• 1 month dream history</li>
+                <li>• Core AI interpretations</li>
+                <li>• DreamSpace read access</li>
+              </ul>
+              <button class="mt-auto glow-button px-4 py-2 text-xs font-medium" onclick="openCtaAuth('journal')">
+                <span>Stay free</span>
+              </button>
+            </article>
+            <article class="relative rounded-2xl border border-violet-400/70 bg-gradient-to-b from-violet-600 via-violet-700 to-slate-950 p-4 flex flex-col gap-3 text-slate-50 shadow-xl shadow-violet-700/40">
+              <div class="absolute -top-2 right-4 text-[10px] px-2 py-0.5 rounded-full bg-amber-300 text-slate-900 font-medium shadow-md">Most loved</div>
+              <h2 class="text-sm font-semibold">Dream Weaver</h2>
+              <p class="text-xs text-violet-100">For regular dreamers ready to see deeper patterns.</p>
+              <div class="text-2xl font-semibold">$1<span class="text-xs font-normal text-violet-100"> / month</span></div>
+              <ul class="text-xs text-violet-100 space-y-1">
+                <li>• Up to 500 dreams stored</li>
+                <li>• 12 month dream history</li>
+                <li>• Enhanced AI interpretations</li>
+                <li>• Share into DreamSpace</li>
+                <li>• Early access to new tools</li>
+              </ul>
+              <button class="mt-auto glow-button px-4 py-2 text-xs font-medium" onclick="alert('Stripe subscription checkout would be triggered here.')">
+                <span>Continue with Stripe</span>
+              </button>
+            </article>
+            <article class="rounded-2xl border border-slate-200/80 dark:border-slate-800/80 bg-white/80 dark:bg-slate-950/90 p-4 flex flex-col gap-3">
+              <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-50">Deep Oracle</h2>
+              <p class="text-xs text-slate-600 dark:text-slate-300">For devoted dream workers and practitioners.</p>
+              <div class="text-2xl font-semibold text-slate-900 dark:text-slate-50">$3<span class="text-xs font-normal text-slate-500"> / month</span></div>
+              <ul class="text-xs text-slate-600 dark:text-slate-300 space-y-1">
+                <li>• Unlimited dreams & history</li>
+                <li>• Rich AI analysis & themes</li>
+                <li>• Advanced tracker insights</li>
+                <li>• Priority support</li>
+                <li>• DreamSpace spotlight eligibility</li>
+              </ul>
+              <button class="mt-auto glow-button px-4 py-2 text-xs font-medium" onclick="alert('Stripe subscription checkout would be triggered here.')">
+                <span>Upgrade with Stripe</span>
+              </button>
+            </article>
+          </div>
+        </main>
+      `;
+    }
+
+    function renderAbout() {
+      return `
+        <main class="max-w-3xl mx-auto px-4 sm:px-6 pt-10 pb-16">
+          <h1 class="text-xl sm:text-2xl font-semibold text-slate-900 dark:text-slate-50 mb-3">About dreeme</h1>
+          <p class="text-xs sm:text-sm text-slate-600 dark:text-slate-300 mb-4">
+            dreeme is a dream journal and interpretation companion built for gentle, nightly rituals. We believe your
+            dreams are not random noise—they are richly encoded reflections of your nervous system, memories, desires
+            and fears, asking to be noticed with care.
+          </p>
+          <p class="text-xs sm:text-sm text-slate-600 dark:text-slate-300 mb-4">
+            Instead of deterministic fortune-telling, our angelic AI prompt—<span class="italic">angelicdeepmind</span>—is tuned to
+            respond with psychological nuance, spiritual sensitivity and a positive, humane tone. Interpretations are
+            suggestions to reflect with, not answers to obey.
+          </p>
+          <div class="rounded-2xl border border-slate-200/70 dark:border-slate-800/80 bg-white/80 dark:bg-slate-950/90 p-4 mb-4 text-xs sm:text-sm text-slate-700 dark:text-slate-200">
+            <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-50 mb-2">Our principles</h2>
+            <ul class="list-disc pl-4 space-y-1">
+              <li>Your dreams belong to you. Private by default, shared only when you choose.</li>
+              <li>Interpretations are collaborative meaning-making, not rigid truths.</li>
+              <li>Technology should feel soft on the nervous system—hence gradients, micro-animations, and quiet UI.</li>
+              <li>Paid tiers exist to sustain a privacy-first, ad-free experience.</li>
+            </ul>
+          </div>
+          <p class="text-xs sm:text-sm text-slate-600 dark:text-slate-300">
+            In a production deployment, dreeme would run on a modern React + TypeScript stack with Clerk for auth,
+            shadcn/ui + Lucide icons for components, a secure database for dream storage, and Stripe for subscriptions.
+            This prototype focuses on showcasing the user journeys and interactions your product spec describes.
+          </p>
+        </main>
+      `;
+    }
+
+    function renderFooter() {
+      return `
+        <footer class="mt-auto border-t border-slate-800/70 bg-slate-950/90/95 text-slate-400 text-[11px]">
+          <div class="max-w-6xl mx-auto px-4 sm:px-6 py-6 flex flex-col gap-6">
+            <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-6">
+              <div class="flex items-center gap-2">
+                <div class="w-7 h-7 rounded-xl bg-gradient-to-br from-violet-400 via-sky-300 to-emerald-300 flex items-center justify-center text-slate-950 text-[11px] font-semibold">dr</div>
+                <div class="flex flex-col">
+                  <span class="text-slate-200 font-medium">dreeme</span>
+                  <span class="text-slate-500">Dream kindly, every night.</span>
+                </div>
+              </div>
+              <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 flex-1 text-[11px]">
+                <div class="space-y-1.5">
+                  <div class="text-slate-300 font-semibold uppercase tracking-wide text-[10px]">Product</div>
+                  <button class="block hover:text-slate-100" onclick="navigate('home')">Overview</button>
+                  <button class="block hover:text-slate-100" onclick="navigate('journal')">Journal</button>
+                  <button class="block hover:text-slate-100" onclick="navigate('dreamspace')">DreamSpace</button>
+                  <button class="block hover:text-slate-100" onclick="navigate('tracker')">Tracker</button>
+                </div>
+                <div class="space-y-1.5">
+                  <div class="text-slate-300 font-semibold uppercase tracking-wide text-[10px]">Company</div>
+                  <button class="block hover:text-slate-100" onclick="navigate('about')">About</button>
+                  <button class="block hover:text-slate-100" onclick="navigate('pricing')">Pricing</button>
+                  <span class="block text-slate-500">Press (soon)</span>
+                  <span class="block text-slate-500">Careers (soon)</span>
+                </div>
+                <div class="space-y-1.5">
+                  <div class="text-slate-300 font-semibold uppercase tracking-wide text-[10px]">Resources</div>
+                  <button class="block hover:text-slate-100" onclick="navigate('dreamspace')">Articles</button>
+                  <span class="block text-slate-500">Help center (soon)</span>
+                  <span class="block text-slate-500">API docs (soon)</span>
+                </div>
+                <div class="space-y-1.5">
+                  <div class="text-slate-300 font-semibold uppercase tracking-wide text-[10px]">Legal</div>
+                  <span class="block text-slate-500">Privacy</span>
+                  <span class="block text-slate-500">Terms</span>
+                  <span class="block text-slate-500">Cookies</span>
+                </div>
+              </div>
+            </div>
+            <div class="flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-slate-800/70 pt-3">
+              <span class="text-slate-500">© ${new Date().getFullYear()} dreeme. All rights reserved.</span>
+              <span class="text-slate-600">Prototype UI · Not a real medical or therapeutic tool.</span>
+            </div>
+          </div>
+        </footer>
+      `;
+    }
+
+    function renderAuthModal() {
+      if (!state.showAuthModal) return '';
+      return `
+        <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-sm">
+          <div class="w-full max-w-sm rounded-2xl border border-slate-700/80 bg-slate-950/95 p-5 text-xs text-slate-100 shadow-xl shadow-slate-900/80">
+            <div class="flex items-start justify-between mb-3">
+              <div>
+                <h2 class="text-sm font-semibold">Sign in to continue</h2>
+                <p class="text-[11px] text-slate-400 mt-0.5">A Clerk-powered modal would appear here in production, keeping your flow seamless.</p>
+              </div>
+              <button class="text-slate-400 hover:text-slate-200" onclick="state.showAuthModal=false; render();">✕</button>
+            </div>
+            <div class="rounded-xl border border-slate-700/80 bg-slate-900/80 p-3 mb-3">
+              <p class="text-[11px] text-slate-300">
+                You&apos;re trying to open <span class="font-medium text-violet-200">${state.authTargetRoute || 'journal'}</span>.
+                After you sign in or sign up, you&apos;ll be redirected right back to this page.
+              </p>
+            </div>
+            <div class="flex flex-col gap-2">
+              <button class="glow-button px-4 py-2 text-xs font-medium" onclick="mockSignIn()">
+                <span>Sign in / Sign up (mock Clerk)</span>
+              </button>
+              <button class="mt-1 text-[11px] text-slate-400 hover:text-slate-200" onclick="state.showAuthModal=false; render();">
+                Continue exploring public pages
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function render() {
+      ensureThemeClass();
+      if (!state.articles.length) initMockContent();
+      let main = '';
+      if (state.route === 'home') main = renderHome();
+      else if (state.route === 'journal') main = renderJournal();
+      else if (state.route === 'dreamspace') main = renderDreamSpace();
+      else if (state.route === 'tracker') main = renderTracker();
+      else if (state.route === 'pricing') main = renderPricing();
+      else if (state.route === 'about') main = renderAbout();
+      const app = document.getElementById('app');
+      app.innerHTML = `
+        ${renderHeader()}
+        ${main}
+        ${renderFooter()}
+        ${renderAuthModal()}
+      `;
+    }
+
+    ensureThemeClass();
+    initMockContent();
+    render();
+  </script>
+</body>
+</html>
