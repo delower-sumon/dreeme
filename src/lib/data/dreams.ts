@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { getServerSession } from 'next-auth'
-import { authOptions } from '../api/auth/[...nextauth]/route'
+import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 
 export async function getSharedDreamsServer() {
     const session = await getServerSession(authOptions)

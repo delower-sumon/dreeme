@@ -7,22 +7,7 @@ export default async function AdminPage() {
     const stats = await getAdminStats()
 
     if (!stats) {
-        // If not an admin, we show a "Forbidden" style page or redirect
-        // For this demo, let's show a nice forbidden UI
-        return (
-            <div className="min-h-screen flex items-center justify-center p-4">
-                <div className="max-w-md w-full text-center">
-                    <div className="w-20 h-20 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center mx-auto mb-6">
-                        <ShieldAlert size={40} className="text-red-600 dark:text-red-500" />
-                    </div>
-                    <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-50 mb-2 font-outfit">Access Restricted</h1>
-                    <p className="text-slate-600 dark:text-slate-400 mb-8">This page is only accessible to site administrators. If you believe this is an error, please contact support.</p>
-                    <a href="/" className="inline-flex items-center justify-center px-6 py-2 rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-semibold transition-transform hover:scale-105">
-                        Back to Home
-                    </a>
-                </div>
-            </div>
-        )
+        redirect('/admin/login')
     }
 
     const statCards = [
