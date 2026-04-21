@@ -1,0 +1,173 @@
+// Prisma Schema - To be used when connecting to MySQL database
+// Documentation: https://www.prisma.io/docs/concepts/components/prisma-schema
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// User Model
+model User {
+  id            String     @id @default(cuid())
+  email         String     @unique
+  name          String?
+  avatar        String?
+  tier          UserTier   @default(DREAMER)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  
+  dreams        Dream[]
+  sharedDreams  SharedDream[]
+  articles      Article[]
+  reacts        React[]
+  comments      Comment[]
+  
+  @@index([email])
+}
+
+enum UserTier {
+  DREAMER
+  LUCID
+  ORACLE
+}
+
+// Dream Model
+model Dream {
+  id              String    @id @default(cuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  name            String
+  date            DateTime
+  text            String    @db.LongText
+  interpretation  String    @db.LongText
+  snippet         String
+  
+  moods           String    // JSON array stored as string
+  sleepHours      Float?
+  
+  shared          SharedDream?
+  
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  @@index([userId])
+  @@index([createdAt])
+}
+
+// Shared Dream (Dream shared to community)
+model SharedDream {
+  id            String    @id @default(cuid())
+  dreamId       String    @unique
+  dream         Dream     @relation(fields: [dreamId], references: [id], onDelete: Cascade)
+  
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  reacts        React[]
+  comments      Comment[]
+  
+  createdAt     DateTime  @default(now())
+  
+  @@index([userId])
+  @@index([createdAt])
+}
+
+// Article Model
+model Article {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  title         String
+  preview       String    @db.Text
+  content       String    @db.LongText
+  category      String
+  featured      Boolean   @default(false)
+  
+  reacts        React[]
+  comments      Comment[]
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  @@index([userId])
+  @@index([createdAt])
+  @@index([featured])
+}
+
+// React/Like Model
+model React {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Type: DREAM, ARTICLE
+  type          String
+  targetId      String    // ID of dream or article
+  
+  // Optional relations for type safety
+  sharedDream   SharedDream?  @relation(fields: [sharedDreamId], references: [id], onDelete: SetNull)
+  sharedDreamId String?
+  
+  article       Article?      @relation(fields: [articleId], references: [id], onDelete: SetNull)
+  articleId     String?
+  
+  createdAt     DateTime  @default(now())
+  
+  @@unique([userId, type, targetId])
+  @@index([userId])
+  @@index([type, targetId])
+}
+
+// Comment Model
+model Comment {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  text          String    @db.Text
+  
+  // Type: DREAM, ARTICLE
+  type          String
+  targetId      String    // ID of dream or article
+  
+  // Optional relations
+  sharedDream   SharedDream?  @relation(fields: [sharedDreamId], references: [id], onDelete: SetNull)
+  sharedDreamId String?
+  
+  article       Article?      @relation(fields: [articleId], references: [id], onDelete: SetNull)
+  articleId     String?
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  @@index([userId])
+  @@index([type, targetId])
+}
+
+// Subscription Model
+model Subscription {
+  id            String    @id @default(cuid())
+  userId        String    @unique
+  
+  tier          UserTier
+  status        SubscriptionStatus
+  
+  stripeId      String?   @unique
+  currentPeriodEnd DateTime?
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELED
+  PAST_DUE
+  INCOMPLETE
+}
