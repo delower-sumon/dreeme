@@ -372,6 +372,14 @@ export default function Header({ theme, onToggleTheme }: HeaderProps) {
           <div className="max-w-6xl mx-auto px-4 py-3">
             <p className="text-xs text-slate-400 mb-1">Signed in as</p>
             <p className="text-sm text-slate-200 mb-3">{profile?.full_name || user.email}</p>
+            <Link
+              href="/profile"
+              onClick={() => setUserMenuOpen(false)}
+              className="w-full px-3 py-2 mb-2 rounded-lg bg-slate-800/50 text-sm text-slate-200 hover:bg-slate-800 transition-colors flex items-center justify-center gap-2"
+            >
+              <UserIcon size={16} />
+              Profile
+            </Link>
             <button
               onClick={handleSignOut}
               className="w-full px-3 py-2 rounded-lg bg-slate-800/50 text-sm text-slate-200 hover:bg-slate-800 transition-colors flex items-center justify-center gap-2"
