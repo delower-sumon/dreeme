@@ -8,7 +8,7 @@
 }
 
 body {
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+  font-family: var(--font-outfit), system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
   color: #000000;
 }
 

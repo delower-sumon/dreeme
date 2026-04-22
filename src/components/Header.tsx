@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Moon, Sun, Menu, X, LogOut, User as UserIcon } from 'lucide-react'
@@ -57,26 +57,7 @@ export default function Header({ theme, onToggleTheme }: HeaderProps) {
     return null
   }
 
-  const [mounted, setMounted] = useState(false)
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
-
   const avatarUrl = getAvatarUrl()
-
-  // Prevent hydration mismatch by not rendering user-specific content until mounted
-  if (!mounted) {
-    return (
-      <header className="sticky top-0 z-40 backdrop-blur-xl bg-slate-900/10 dark:bg-slate-950/10 border-b border-slate-800/40">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 flex items-center justify-between h-16">
-          <Link href="/" className="hover:opacity-80 transition-opacity">
-            <Logo size="md" showText={true} />
-          </Link>
-        </div>
-      </header>
-    )
-  }
 
   return (
     <header className="sticky top-0 z-40 backdrop-blur-xl bg-slate-900/10 dark:bg-slate-950/10 border-b border-slate-800/40">

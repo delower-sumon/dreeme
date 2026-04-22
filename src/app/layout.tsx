@@ -1,85 +1,50 @@
-'use client'
-
-import React, { useState, useEffect } from 'react'
+import type { Metadata } from 'next'
+import { Outfit } from 'next/font/google'
 import './globals.css'
-import Header from '@/components/Header'
-import Footer from '@/components/Footer'
-import { AuthProvider } from '@/components/auth/AuthProvider'
-import { QueryProvider } from '@/providers/QueryProvider'
-import { SessionProvider } from 'next-auth/react'
+import ThemeProvider from '@/providers/ThemeProvider'
+
+// ─── Phase 3-A: next/font (replaces CDN loading) ─────────────────────────────
+const outfit = Outfit({
+  subsets: ['latin'],
+  weight: ['300', '400', '500', '600', '700'],
+  variable: '--font-outfit',
+  display: 'swap',
+})
+
+// ─── SEO Metadata ─────────────────────────────────────────────────────────────
+export const metadata: Metadata = {
+  title: 'Dreeme — Your Personal Dream Journal',
+  description: 'Record, interpret, and explore your dreams with AI-powered insights.',
+  icons: { icon: '/logo.svg' },
+}
+
+// ─── Root Layout (Server Component) ──────────────────────────────────────────
+// This is intentionally a Server Component — no 'use client' directive.
+// All client-side state (theme, auth, query cache) lives in ThemeProvider.
 
 export default function RootLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  const [theme, setTheme] = useState<'light' | 'dark'>('light')
-  const [mounted, setMounted] = useState(false)
-
-  useEffect(() => {
-    setMounted(true)
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-    const saved = localStorage.getItem('theme') as 'light' | 'dark' | null
-    const initial = saved || (prefersDark ? 'dark' : 'light')
-    setTheme(initial)
-    applyTheme(initial)
-  }, [])
-
-  const applyTheme = (t: 'light' | 'dark') => {
-    const html = document.documentElement
-    html.dataset.theme = t
-    if (t === 'dark') {
-      html.classList.add('dark')
-      html.classList.remove('light')
-    } else {
-      html.classList.add('light')
-      html.classList.remove('dark')
-    }
-    localStorage.setItem('theme', t)
-  }
-
-  const toggleTheme = () => {
-    const newTheme = theme === 'light' ? 'dark' : 'light'
-    setTheme(newTheme)
-    applyTheme(newTheme)
-  }
-
-  if (!mounted) {
-    return (
-      <html lang="en">
-        <head>
-          <title>dreeme</title>
-          <link rel="icon" href="/logo.svg" type="image/svg+xml" />
-        </head>
-        <body className="dream-gradient-bg min-h-screen text-black dark:text-slate-50">
-          <div className="min-h-screen flex flex-col" />
-        </body>
-      </html>
-    )
-  }
-
   return (
-    <html lang="en" data-theme={theme}>
+    <html lang="en" suppressHydrationWarning className={outfit.variable}>
       <head>
-        <title>dreeme</title>
-        <link rel="icon" href="/logo.svg" type="image/svg+xml" />
+        {/* Phase 1-B: Inline script — sets theme class BEFORE hydration, eliminates flash */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var t=localStorage.getItem('theme')||((window.matchMedia('(prefers-color-scheme: dark)').matches)?'dark':'light');document.documentElement.dataset.theme=t;document.documentElement.classList.add(t);}catch(e){}})();`,
+          }}
+        />
       </head>
-      <body className={`dream-gradient-bg min-h-screen text-black dark:text-slate-50 transition-colors duration-500 ${theme === 'dark' ? 'dark' : 'light'}`}>
-        <SessionProvider>
-          <QueryProvider>
-            <AuthProvider>
-              <div className="min-h-screen flex flex-col">
-                <Header theme={theme} onToggleTheme={toggleTheme} />
-                <main className="flex-1">
-                  {children}
-                </main>
-                <Footer />
-              </div>
-            </AuthProvider>
-          </QueryProvider>
-        </SessionProvider>
+      <body
+        className="dream-gradient-bg min-h-screen text-black dark:text-slate-50 transition-colors duration-500"
+        suppressHydrationWarning
+      >
+        <ThemeProvider>
+          {children}
+        </ThemeProvider>
       </body>
     </html>
   )
 }
-

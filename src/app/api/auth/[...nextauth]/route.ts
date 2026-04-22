@@ -3,6 +3,19 @@ import GoogleProvider from "next-auth/providers/google"
 import CredentialsProvider from "next-auth/providers/credentials"
 import bcrypt from "bcryptjs"
 import { createClient } from "@supabase/supabase-js"
+import crypto from 'crypto'
+
+// Helper to generate a deterministic UUID from a string (e.g., Google sub)
+// This ensures we always get the same UUID for the same provider ID
+const toUUID = (id: string) => {
+    if (!id) return id
+    // If it's already a valid UUID, return it
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) return id
+    
+    // Otherwise, create a deterministic hash and format as UUID
+    const hash = crypto.createHash('sha256').update(id).digest('hex')
+    return `${hash.slice(0, 8)}-${hash.slice(8, 12)}-${hash.slice(12, 16)}-${hash.slice(16, 20)}-${hash.slice(20, 32)}`
+}
 
 // Initialize Supabase client with service role key for admin operations
 const supabase = createClient(
@@ -56,24 +69,30 @@ export const authOptions = {
         strategy: "jwt" as const,
     },
     callbacks: {
-        async jwt({ token, account, profile }: any) {
-            // On first sign-in, sync user to Supabase
+        async jwt({ token, account, profile, user }: any) {
+            // Handle credentials login
+            if (user) {
+                token.id = toUUID(user.id)
+            }
+
+            // On first social sign-in, sync user to Supabase
             if (account && profile) {
+                const userId = toUUID(profile.sub)
+                token.id = userId
                 token.accessToken = account.access_token
-                token.id = profile.sub
 
                 try {
                     // Check if user exists in Supabase
                     const { data: existingUser } = await supabase
                         .from('users')
                         .select('*')
-                        .eq('id', profile.sub)
+                        .eq('id', userId)
                         .single()
 
                     if (!existingUser) {
                         // Create new user
                         await supabase.from('users').insert({
-                            id: profile.sub,
+                            id: userId,
                             email: profile.email,
                             name: profile.name,
                             image: profile.picture,
@@ -85,7 +104,7 @@ export const authOptions = {
                         await supabase.from('users').update({
                             name: profile.name,
                             image: profile.picture,
-                        }).eq('id', profile.sub)
+                        }).eq('id', userId)
                         console.log('✅ User updated in Supabase:', profile.email)
                     }
 
@@ -93,7 +112,7 @@ export const authOptions = {
                     const { error: profileError } = await supabase
                         .from('profiles')
                         .upsert({
-                            id: profile.sub,
+                            id: userId,
                             full_name: profile.name,
                             avatar_url: profile.picture,
                             updated_at: new Date().toISOString(),

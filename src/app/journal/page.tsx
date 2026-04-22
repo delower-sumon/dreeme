@@ -18,7 +18,7 @@ export default function JournalPage() {
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0])
   const [selectedMoodIds, setSelectedMoodIds] = useState<string[]>([])
   const [hours, setHours] = useState('')
-  const [interpretation, setInterpretation] = useState('')
+  const [interpretation, setInterpretation] = useState<any>(null)
   const [isInterpreting, setIsInterpreting] = useState(false)
   const [isRecording, setIsRecording] = useState(false)
   const [recognition, setRecognition] = useState<any>(null)
@@ -141,6 +141,47 @@ export default function JournalPage() {
     }
   }, [])
 
+  const renderInterpretation = (interpretation: any) => {
+    if (!interpretation) return <span className="italic text-slate-400">No interpretation available yet.</span>;
+
+    let data = interpretation;
+    if (typeof interpretation === 'string') {
+      try {
+        data = JSON.parse(interpretation);
+      } catch (e) {
+        // Not JSON, just display as text
+      }
+    }
+
+    if (typeof data === 'object' && data !== null && data.opening) {
+      return (
+        <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-500">
+          <div>
+            <h4 className="text-[10px] font-bold text-violet-500 uppercase tracking-wider mb-1">The Omen</h4>
+            <p className="text-xs sm:text-sm leading-relaxed text-slate-700 dark:text-slate-100 font-medium">{data.opening}</p>
+          </div>
+          <div className="space-y-2">
+            <h4 className="text-[10px] font-bold text-violet-500 uppercase tracking-wider mb-1">Key Symbols</h4>
+            <ul className="space-y-2">
+              {data.bullets?.map((bullet: string, idx: number) => (
+                <li key={idx} className="flex gap-2 text-xs sm:text-sm text-slate-600 dark:text-slate-300">
+                  <span className="text-violet-400 mt-1">•</span>
+                  <span>{bullet}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div className="pt-3 border-t border-violet-100 dark:border-violet-900/40">
+            <h4 className="text-[10px] font-bold text-violet-500 uppercase tracking-wider mb-1">Guidance</h4>
+            <p className="text-xs sm:text-sm leading-relaxed text-slate-700 dark:text-slate-100 italic">{data.closing}</p>
+          </div>
+        </div>
+      );
+    }
+
+    return <div className="text-xs sm:text-sm leading-relaxed text-slate-700 dark:text-slate-100">{interpretation}</div>;
+  };
+
   const toggleMood = (moodId: string) => {
     if (selectedMoodIds.includes(moodId)) {
       setSelectedMoodIds(selectedMoodIds.filter(id => id !== moodId))
@@ -171,7 +212,7 @@ export default function JournalPage() {
     if (!dreamText.trim()) return
 
     setIsInterpreting(true)
-    setInterpretation('')
+    setInterpretation(null)
 
     try {
       const response = await fetch('/api/interpret', {
@@ -181,10 +222,16 @@ export default function JournalPage() {
       })
 
       const data = await response.json()
+
+      if (!response.ok) {
+        setInterpretation(data.error || 'The interpreter is temporarily unavailable. Please try again.')
+        return
+      }
+
       setInterpretation(data.interpretation || 'Unable to generate interpretation')
     } catch (error) {
       console.error('Interpretation error:', error)
-      setInterpretation('Error generating interpretation. Please try again.')
+      setInterpretation('Network error. Please check your connection and try again.')
     } finally {
       setIsInterpreting(false)
     }
@@ -581,12 +628,20 @@ export default function JournalPage() {
               {/* Interpretation Display */}
               <div className="flex-1 rounded-2xl bg-violet-50/40 dark:bg-slate-900/60 border border-violet-100 dark:border-slate-700/50 p-4 overflow-y-auto min-h-[180px] shadow-sm">
                 {isInterpreting ? (
-                  <div className="h-24 rounded-xl loader-pulse"></div>
+                  <div className="h-full flex flex-col gap-3 justify-center items-center py-8">
+                    <div className="w-12 h-12 rounded-full border-2 border-violet-500/20 border-t-violet-500 animate-spin"></div>
+                    <p className="text-[10px] text-violet-500 font-medium animate-pulse uppercase tracking-widest">Consulting the Oracle...</p>
+                  </div>
                 ) : interpretation ? (
-                  <div className="text-xs sm:text-sm leading-relaxed text-slate-700 dark:text-slate-100">{interpretation}</div>
+                  renderInterpretation(interpretation)
                 ) : (
-                  <div className="text-[11px] text-slate-400 italic">
-                    Your angelic dream interpreter will appear here with a soft, human-centered reflection once you click <span className="text-violet-500 dark:text-violet-300 font-medium">Interpret</span>.
+                  <div className="h-full flex flex-col items-center justify-center text-center px-4">
+                    <div className="w-12 h-12 rounded-full bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center mb-3">
+                      <Sparkles className="text-violet-500" size={20} />
+                    </div>
+                    <div className="text-[11px] text-slate-400 italic">
+                      Your angelic dream interpreter will appear here with a soft, human-centered reflection once you click <span className="text-violet-500 dark:text-violet-300 font-medium">Interpret</span>.
+                    </div>
                   </div>
                 )}
               </div>
@@ -841,8 +896,8 @@ export default function JournalPage() {
                     )}
                   </button>
                 </div>
-                <div className="p-4 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
-                  {viewDream.interpretation || <span className="italic text-slate-400">No interpretation available yet.</span>}
+                <div className="p-4">
+                  {renderInterpretation(viewDream.interpretation)}
                 </div>
               </div>
 

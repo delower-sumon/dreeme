@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useSession, signOut as nextAuthSignOut } from 'next-auth/react'
 import type { User } from '@supabase/supabase-js'
@@ -34,6 +34,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const [profile, setProfile] = useState<Profile | null>(null)
     const [loading, setLoading] = useState(true)
     const supabase = createClient()
+    // Track which userId we've already fetched a profile for — prevents re-fetching on every navigation
+    const profileFetchedFor = useRef<string | null>(null)
 
     const fetchProfile = async (userId: string) => {
         try {
@@ -76,12 +78,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }
             setUser(mappedUser)
 
-            // Fetch profile in background, don't block UI
-            if (mappedUser.id) {
-                // Only fetch if we don't have it or it's different
-                if (!profile || profile.id !== mappedUser.id) {
-                    fetchProfile(mappedUser.id)
-                }
+            // Only fetch profile if we haven't fetched for this user yet
+            if (mappedUser.id && profileFetchedFor.current !== mappedUser.id) {
+                profileFetchedFor.current = mappedUser.id
+                fetchProfile(mappedUser.id)
             }
         } else {
             setUser(null)
