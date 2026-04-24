@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
+import ReactMarkdown from 'react-markdown'
 import { Mic, MicOff, Calendar, Sparkles, Save, Trash2, Share2 } from 'lucide-react'
 import { useAuth } from '@/components/auth/AuthProvider'
 import { useRouter, useSearchParams } from 'next/navigation'
@@ -158,7 +159,15 @@ export default function JournalPage() {
         <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-500">
           <div>
             <h4 className="text-[10px] font-bold text-violet-500 uppercase tracking-wider mb-1">The Omen</h4>
-            <p className="text-xs sm:text-sm leading-relaxed text-slate-700 dark:text-slate-100 font-medium">{data.opening}</p>
+            <p className="text-xs sm:text-sm leading-relaxed text-slate-700 dark:text-slate-100 font-medium">
+              <ReactMarkdown 
+                components={{
+                  p: ({node, ...props}) => <span {...props} />
+                }}
+              >
+                {data.opening}
+              </ReactMarkdown>
+            </p>
           </div>
           <div className="space-y-2">
             <h4 className="text-[10px] font-bold text-violet-500 uppercase tracking-wider mb-1">Key Symbols</h4>
@@ -166,20 +175,40 @@ export default function JournalPage() {
               {data.bullets?.map((bullet: string, idx: number) => (
                 <li key={idx} className="flex gap-2 text-xs sm:text-sm text-slate-600 dark:text-slate-300">
                   <span className="text-violet-400 mt-1">•</span>
-                  <span>{bullet}</span>
+                  <span className="flex-1">
+                    <ReactMarkdown 
+                      components={{
+                        p: ({node, ...props}) => <span {...props} />
+                      }}
+                    >
+                      {bullet}
+                    </ReactMarkdown>
+                  </span>
                 </li>
               ))}
             </ul>
           </div>
           <div className="pt-3 border-t border-violet-100 dark:border-violet-900/40">
             <h4 className="text-[10px] font-bold text-violet-500 uppercase tracking-wider mb-1">Guidance</h4>
-            <p className="text-xs sm:text-sm leading-relaxed text-slate-700 dark:text-slate-100 italic">{data.closing}</p>
+            <div className="text-xs sm:text-sm leading-relaxed text-slate-700 dark:text-slate-100 italic">
+              <ReactMarkdown 
+                components={{
+                  p: ({node, ...props}) => <span {...props} />
+                }}
+              >
+                {data.closing}
+              </ReactMarkdown>
+            </div>
           </div>
         </div>
       );
     }
 
-    return <div className="text-xs sm:text-sm leading-relaxed text-slate-700 dark:text-slate-100">{interpretation}</div>;
+    return (
+      <div className="text-xs sm:text-sm leading-relaxed text-slate-700 dark:text-slate-100">
+        <ReactMarkdown>{interpretation}</ReactMarkdown>
+      </div>
+    );
   };
 
   const toggleMood = (moodId: string) => {
