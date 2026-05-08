@@ -8,8 +8,11 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { createDream, getUserDreams, deleteDream, updateDream, type DreamWithMoods } from '@/lib/services/dreams'
 import { getAllMoods, type Mood } from '@/lib/services/moods'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { Suspense } from 'react'
 
-export default function JournalPage() {
+export const dynamic = 'force-dynamic'
+
+function JournalContent() {
   const { user, loading: authLoading } = useAuth()
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -960,5 +963,13 @@ export default function JournalPage() {
         </div>
       )}
     </div>
+  )
+}
+
+export default function JournalPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-slate-400">Loading...</div>}>
+      <JournalContent />
+    </Suspense>
   )
 }

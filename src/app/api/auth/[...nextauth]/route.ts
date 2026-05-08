@@ -73,6 +73,8 @@ export const authOptions = {
             // Handle credentials login
             if (user) {
                 token.id = toUUID(user.id)
+                // Preserve image for credentials users
+                if (user.image) token.picture = user.image
             }
 
             // On first social sign-in, sync user to Supabase
@@ -80,6 +82,8 @@ export const authOptions = {
                 const userId = toUUID(profile.sub)
                 token.id = userId
                 token.accessToken = account.access_token
+                // Explicitly store Google picture so it persists in the JWT
+                token.picture = profile.picture
 
                 try {
                     // Check if user exists in Supabase
@@ -133,6 +137,8 @@ export const authOptions = {
             // Send properties to the client
             if (session.user) {
                 session.user.id = token.id
+                // Forward the avatar URL from JWT so it's always available client-side
+                if (token.picture) session.user.image = token.picture
                 session.accessToken = token.accessToken
             }
             return session

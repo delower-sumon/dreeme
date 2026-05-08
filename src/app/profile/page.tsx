@@ -2,87 +2,85 @@
 
 import React, { useState, useRef } from 'react'
 import { useAuth } from '@/components/auth/AuthProvider'
-import { createClient } from '@/lib/supabase/client'
-import { Camera, User, Mail, Loader2 } from 'lucide-react'
+import { Camera, User, Mail, Loader2, RefreshCw } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
+export const dynamic = 'force-dynamic'
+
 export default function ProfilePage() {
-    const { user, profile, updateProfile } = useAuth()
+    const { user, profile, updateProfile, refreshProfile } = useAuth()
     const [uploading, setUploading] = useState(false)
+    const [imgError, setImgError] = useState(false)
     const [error, setError] = useState('')
     const [success, setSuccess] = useState('')
     const fileInputRef = useRef<HTMLInputElement>(null)
     const router = useRouter()
-    const supabase = createClient()
+
+    React.useEffect(() => {
+        if (!user) {
+            router.push('/auth/login')
+        }
+    }, [user, router])
 
     if (!user) {
-        router.push('/auth/login')
-        return null
-    }
-
-    const getAvatarUrl = () => {
-        if (profile?.avatar_url) {
-            return profile.avatar_url
-        }
-        if (user?.user_metadata?.avatar_url) {
-            return user.user_metadata.avatar_url
-        }
         return null
     }
 
     const getUserInitials = () => {
-        if (profile?.full_name) {
-            const names = profile.full_name.split(' ')
-            return names.length > 1
-                ? `${names[0][0]}${names[1][0]}`.toUpperCase()
-                : names[0].substring(0, 2).toUpperCase()
+        const name = profile?.full_name || user?.user_metadata?.full_name || user?.user_metadata?.name || ''
+        if (name) {
+            const parts = name.trim().split(/\s+/)
+            return parts.length > 1
+                ? `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase()
+                : parts[0].substring(0, 2).toUpperCase()
         }
-        const email = user.email || ''
-        return email.substring(0, 2).toUpperCase()
+        return (user.email || '').substring(0, 2).toUpperCase()
     }
 
+    const avatarUrl = !imgError ? (profile?.avatar_url || user?.user_metadata?.avatar_url) : null
+
+    // Upload a chosen file via the server-side avatar API route
     const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
         try {
             setError('')
             setSuccess('')
             setUploading(true)
+            setImgError(false)
 
-            if (!event.target.files || event.target.files.length === 0) {
-                return
-            }
+            if (!event.target.files || event.target.files.length === 0) return
 
             const file = event.target.files[0]
-            const fileExt = file.name.split('.').pop()
-            const filePath = `${user.id}-${Math.random()}.${fileExt}`
+            const formData = new FormData()
+            formData.append('file', file)
 
-            // Upload to Supabase Storage
-            const { error: uploadError } = await supabase.storage
-                .from('avatars')
-                .upload(filePath, file, { upsert: true })
+            const res = await fetch('/api/profile/avatar', {
+                method: 'POST',
+                body: formData,
+            })
 
-            if (uploadError) {
-                throw uploadError
+            if (!res.ok) {
+                const errData = await res.json().catch(() => ({ error: 'Upload failed' }))
+                throw new Error(errData.error || 'Upload failed')
             }
 
-            // Get public URL
-            const { data: { publicUrl } } = supabase.storage
-                .from('avatars')
-                .getPublicUrl(filePath)
-
-            // Update profile
-            await updateProfile({ avatar_url: publicUrl })
+            // Refresh the profile so the new avatar_url is shown immediately
+            await refreshProfile()
             setSuccess('Profile picture updated successfully!')
-        } catch (error: any) {
-            setError(error.message || 'Error uploading image')
+        } catch (err: any) {
+            setError(err.message || 'Error uploading image')
         } finally {
             setUploading(false)
+            // Reset the file input so the same file can be picked again
+            if (fileInputRef.current) fileInputRef.current.value = ''
         }
     }
 
+    // Save the Google profile picture URL into the DB profile row
     const handleUseGoogleAvatar = async () => {
         try {
             setError('')
             setSuccess('')
+            setImgError(false)
 
             const googleAvatar = user?.user_metadata?.avatar_url
             if (!googleAvatar) {
@@ -92,25 +90,24 @@ export default function ProfilePage() {
 
             await updateProfile({ avatar_url: googleAvatar })
             setSuccess('Using Google profile picture!')
-        } catch (error: any) {
-            setError(error.message || 'Error updating profile')
+        } catch (err: any) {
+            setError(err.message || 'Error updating profile')
         }
     }
 
     const [fullName, setFullName] = useState(profile?.full_name || '')
     const [isSaving, setIsSaving] = useState(false)
 
-    // Update local state when profile loads
+    // Sync local state when the profile loads from the DB
     React.useEffect(() => {
-        if (profile?.full_name) {
-            setFullName(profile.full_name)
-        }
+        if (profile?.full_name) setFullName(profile.full_name)
     }, [profile])
 
     const handleUpdateProfile = async () => {
         try {
             setError('')
             setSuccess('')
+            setImgError(false)
             setIsSaving(true)
 
             if (!fullName.trim()) {
@@ -120,14 +117,12 @@ export default function ProfilePage() {
 
             await updateProfile({ full_name: fullName.trim() })
             setSuccess('Profile updated successfully!')
-        } catch (error: any) {
-            setError(error.message || 'Error updating profile')
+        } catch (err: any) {
+            setError(err.message || 'Error updating profile')
         } finally {
             setIsSaving(false)
         }
     }
-
-    const avatarUrl = getAvatarUrl()
 
     return (
         <div className="min-h-full pb-12">
@@ -149,10 +144,12 @@ export default function ProfilePage() {
                         <div className="relative mb-4">
                             <div className="w-32 h-32 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center text-white text-3xl font-bold shadow-lg shadow-violet-500/30 overflow-hidden">
                                 {avatarUrl ? (
+                                    /* eslint-disable-next-line @next/next/no-img-element */
                                     <img
                                         src={avatarUrl}
                                         alt="Profile"
                                         className="w-full h-full object-cover"
+                                        onError={() => setImgError(true)}
                                     />
                                 ) : (
                                     getUserInitials()
@@ -162,6 +159,7 @@ export default function ProfilePage() {
                                 onClick={() => fileInputRef.current?.click()}
                                 disabled={uploading}
                                 className="absolute bottom-0 right-0 w-10 h-10 rounded-full bg-violet-500 hover:bg-violet-600 text-white flex items-center justify-center shadow-lg transition-colors disabled:opacity-50"
+                                title="Upload new profile picture"
                             >
                                 {uploading ? (
                                     <Loader2 size={20} className="animate-spin" />
@@ -185,14 +183,18 @@ export default function ProfilePage() {
                             {user.email}
                         </p>
 
-                        {user?.user_metadata?.avatar_url && (
-                            <button
-                                onClick={handleUseGoogleAvatar}
-                                className="text-sm text-violet-600 dark:text-violet-400 hover:text-violet-700 dark:hover:text-violet-300 transition-colors font-medium"
-                            >
-                                Use Google Profile Picture
-                            </button>
-                        )}
+                        {/* Quick-action buttons */}
+                        <div className="flex flex-wrap gap-2 justify-center">
+                            {user?.user_metadata?.avatar_url && (
+                                <button
+                                    onClick={handleUseGoogleAvatar}
+                                    className="text-sm text-violet-600 dark:text-violet-400 hover:text-violet-700 dark:hover:text-violet-300 transition-colors font-medium flex items-center gap-1"
+                                >
+                                    <RefreshCw size={14} />
+                                    Use Google Picture
+                                </button>
+                            )}
+                        </div>
                     </div>
 
                     {/* Messages */}
@@ -201,7 +203,6 @@ export default function ProfilePage() {
                             {error}
                         </div>
                     )}
-
                     {success && (
                         <div className="mb-4 p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/40 text-emerald-600 dark:text-emerald-200 text-sm">
                             {success}
@@ -240,14 +241,14 @@ export default function ProfilePage() {
                                 />
                             </div>
                             <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                                Email cannot be changed as it is linked to your Google account.
+                                Email is linked to your account and cannot be changed here.
                             </p>
                         </div>
 
                         <div className="pt-4 flex items-center justify-end">
                             <button
                                 onClick={handleUpdateProfile}
-                                disabled={isSaving || fullName === profile?.full_name}
+                                disabled={isSaving || fullName === (profile?.full_name ?? '')}
                                 className="px-6 py-2.5 rounded-lg bg-violet-600 hover:bg-violet-700 text-white font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                             >
                                 {isSaving ? (

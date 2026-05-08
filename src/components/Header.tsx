@@ -15,6 +15,7 @@ interface HeaderProps {
 export default function Header({ theme, onToggleTheme }: HeaderProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
+  const [imgError, setImgError] = useState(false)
   const { user, profile, loading, signOut } = useAuth()
   const router = useRouter()
 
@@ -34,30 +35,25 @@ export default function Header({ theme, onToggleTheme }: HeaderProps) {
   }
 
   const getUserInitials = () => {
-    if (!user) return 'ID'
+    if (!user) return '??'
+    
+    // Try profile first
     if (profile?.full_name) {
-      const names = profile.full_name.split(' ')
-      return names.length > 1
-        ? `${names[0][0]}${names[1][0]}`.toUpperCase()
-        : names[0].substring(0, 2).toUpperCase()
+      const names = profile.full_name.trim().split(/\s+/)
+      if (names.length >= 2) return `${names[0][0]}${names[names.length - 1][0]}`.toUpperCase()
+      return names[0].substring(0, 2).toUpperCase()
     }
-    const email = user.email || ''
-    return email.substring(0, 2).toUpperCase()
+
+    // Fallback to session user name
+    const name = user.user_metadata?.full_name || user.user_metadata?.name || user.email || ''
+    if (name.includes('@')) return name.substring(0, 2).toUpperCase()
+    
+    const names = name.trim().split(/\s+/)
+    if (names.length >= 2) return `${names[0][0]}${names[names.length - 1][0]}`.toUpperCase()
+    return names[0].substring(0, 2).toUpperCase()
   }
 
-  const getAvatarUrl = () => {
-    // First check if user has custom avatar
-    if (profile?.avatar_url) {
-      return profile.avatar_url
-    }
-    // Then check for Google profile picture
-    if (user?.user_metadata?.avatar_url) {
-      return user.user_metadata.avatar_url
-    }
-    return null
-  }
-
-  const avatarUrl = getAvatarUrl()
+  const avatarUrl = !imgError ? (profile?.avatar_url || user?.user_metadata?.avatar_url) : null
 
   return (
     <header className="sticky top-0 z-40 backdrop-blur-xl bg-slate-900/10 dark:bg-slate-950/10 border-b border-slate-800/40">
@@ -159,6 +155,7 @@ export default function Header({ theme, onToggleTheme }: HeaderProps) {
                         src={avatarUrl}
                         alt="Profile"
                         className="w-full h-full object-cover"
+                        onError={() => setImgError(true)}
                       />
                     ) : (
                       getUserInitials()
@@ -284,6 +281,7 @@ export default function Header({ theme, onToggleTheme }: HeaderProps) {
                   src={avatarUrl}
                   alt="Profile"
                   className="w-full h-full object-cover"
+                  onError={() => setImgError(true)}
                 />
               ) : (
                 getUserInitials()

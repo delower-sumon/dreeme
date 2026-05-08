@@ -29,11 +29,12 @@ export async function getTrackerData(): Promise<TrackerData | null> {
   ])
 
   // Process Stats
+  const statsData = (statsRes.data as any) || {}
   const stats = {
-    totalDreams: statsRes.data?.total_dreams || 0,
-    avgSleep: statsRes.data?.avg_sleep_hours || 0,
-    dreamsThisWeek: statsRes.data?.dreams_this_week || 0,
-    currentStreak: statsRes.data?.current_streak || 0,
+    totalDreams: statsData.total_dreams || 0,
+    avgSleep: statsData.avg_sleep_hours || 0,
+    dreamsThisWeek: statsData.dreams_this_week || 0,
+    currentStreak: statsData.current_streak || 0,
   }
 
   // Process Moods

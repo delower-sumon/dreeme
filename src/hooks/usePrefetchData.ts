@@ -17,54 +17,55 @@ export function usePrefetchData() {
         // Only prefetch if user is authenticated
         if (!user) return
 
-        // Use a small delay to ensure homepage renders first
-        const timer = setTimeout(() => {
-            // Prefetch Journal page data
-            queryClient.prefetchQuery({
+        // Staggered prefetch to prevent hitting the DB with 7 simultaneous requests
+        const prefetch = async () => {
+            // Priority 1: Journal & Moods
+            await queryClient.prefetchQuery({
                 queryKey: ['user-dreams'],
                 queryFn: getUserDreams,
-                staleTime: 60 * 1000, // 1 minute
+                staleTime: 60 * 1000,
             })
-
-            queryClient.prefetchQuery({
+            await queryClient.prefetchQuery({
                 queryKey: ['moods'],
                 queryFn: getAllMoods,
-                staleTime: 5 * 60 * 1000, // 5 minutes (moods rarely change)
+                staleTime: 5 * 60 * 1000,
             })
 
-            // Prefetch DreamSpace page data
-            queryClient.prefetchQuery({
+            // Priority 2: DreamSpace
+            await new Promise(resolve => setTimeout(resolve, 300))
+            await queryClient.prefetchQuery({
                 queryKey: ['shared-dreams'],
                 queryFn: getSharedDreams,
-                staleTime: 30 * 1000, // 30 seconds
+                staleTime: 30 * 1000,
             })
 
-            // Prefetch Tracker page data
-            queryClient.prefetchQuery({
-                queryKey: ['dream-stats'],
-                queryFn: getUserDreamStats,
-                staleTime: 60 * 1000, // 1 minute
-            })
+            // Priority 3: Analytics (Tracker)
+            await new Promise(resolve => setTimeout(resolve, 300))
+            await Promise.all([
+                queryClient.prefetchQuery({
+                    queryKey: ['dream-stats'],
+                    queryFn: getUserDreamStats,
+                    staleTime: 60 * 1000,
+                }),
+                queryClient.prefetchQuery({
+                    queryKey: ['mood-distribution'],
+                    queryFn: getUserMoodDistribution,
+                    staleTime: 60 * 1000,
+                }),
+                queryClient.prefetchQuery({
+                    queryKey: ['weekly-frequency'],
+                    queryFn: getWeeklyDreamFrequency,
+                    staleTime: 60 * 1000,
+                }),
+                queryClient.prefetchQuery({
+                    queryKey: ['sleep-vs-dreams'],
+                    queryFn: getSleepVsDreams,
+                    staleTime: 60 * 1000,
+                })
+            ])
+        }
 
-            queryClient.prefetchQuery({
-                queryKey: ['mood-distribution'],
-                queryFn: getUserMoodDistribution,
-                staleTime: 60 * 1000, // 1 minute
-            })
-
-            queryClient.prefetchQuery({
-                queryKey: ['weekly-frequency'],
-                queryFn: getWeeklyDreamFrequency,
-                staleTime: 60 * 1000, // 1 minute
-            })
-
-            queryClient.prefetchQuery({
-                queryKey: ['sleep-vs-dreams'],
-                queryFn: getSleepVsDreams,
-                staleTime: 60 * 1000, // 1 minute
-            })
-        }, 500) // 500ms delay to let homepage render first
-
+        const timer = setTimeout(prefetch, 800)
         return () => clearTimeout(timer)
     }, [user, queryClient])
 }

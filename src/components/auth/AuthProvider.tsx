@@ -1,7 +1,6 @@
 'use client'
 
 import { createContext, useContext, useEffect, useRef, useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import { useSession, signOut as nextAuthSignOut } from 'next-auth/react'
 import type { User } from '@supabase/supabase-js'
 
@@ -18,6 +17,7 @@ interface AuthContextType {
     loading: boolean
     signOut: () => Promise<void>
     updateProfile: (updates: Partial<Profile>) => Promise<void>
+    refreshProfile: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -26,6 +26,7 @@ const AuthContext = createContext<AuthContextType>({
     loading: true,
     signOut: async () => { },
     updateProfile: async () => { },
+    refreshProfile: async () => { },
 })
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -33,59 +34,55 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const [user, setUser] = useState<User | null>(null)
     const [profile, setProfile] = useState<Profile | null>(null)
     const [loading, setLoading] = useState(true)
-    const supabase = createClient()
     // Track which userId we've already fetched a profile for — prevents re-fetching on every navigation
     const profileFetchedFor = useRef<string | null>(null)
 
-    const fetchProfile = async (userId: string) => {
+    const fetchProfile = async () => {
         try {
-            const { data, error } = await supabase
-                .from('profiles')
-                .select('*')
-                .eq('id', userId)
-                .maybeSingle()
-
-            if (!error && data) {
+            const res = await fetch('/api/profile')
+            if (!res.ok) {
+                // If it's a 404 or other error, we don't want to keep retrying or showing a broken state
+                console.warn(`Profile fetch returned ${res.status}`)
+                return
+            }
+            const data: Profile = await res.json()
+            if (data) {
                 setProfile(data)
             }
         } catch (error) {
-            console.log('Profile not found, using user metadata instead')
+            console.error('Profile fetch failed:', error)
         }
     }
 
     useEffect(() => {
-        if (status === 'loading') {
-            // Don't set loading to true here to avoid flashing content
-            // NextAuth's status handles the initial load
-            return
-        }
+        if (status === 'loading') return
 
         if (session?.user) {
-            // Map NextAuth user to Supabase User shape
+            // Map NextAuth user to the shape the rest of the app expects
             const mappedUser: any = {
                 id: (session.user as any).id,
                 email: session.user.email,
                 user_metadata: {
-                    avatar_url: session.user.image,
-                    full_name: session.user.name,
+                    // session.user.image is guaranteed by our updated JWT/session callbacks
+                    avatar_url: session.user.image ?? null,
+                    full_name: session.user.name ?? null,
                 },
-                app_metadata: {
-                    provider: 'google'
-                },
+                app_metadata: { provider: 'google' },
                 aud: 'authenticated',
                 created_at: new Date().toISOString(),
-                role: 'authenticated'
+                role: 'authenticated',
             }
             setUser(mappedUser)
 
-            // Only fetch profile if we haven't fetched for this user yet
+            // Only fetch the DB profile once per user session
             if (mappedUser.id && profileFetchedFor.current !== mappedUser.id) {
                 profileFetchedFor.current = mappedUser.id
-                fetchProfile(mappedUser.id)
+                fetchProfile()
             }
         } else {
             setUser(null)
             setProfile(null)
+            profileFetchedFor.current = null
         }
         setLoading(false)
     }, [session, status])
@@ -94,29 +91,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await nextAuthSignOut({ redirect: false })
         setUser(null)
         setProfile(null)
+        profileFetchedFor.current = null
         window.location.href = '/'
     }
 
     const updateProfile = async (updates: Partial<Profile>) => {
-        if (!user) return
-
         try {
-            const { error } = await supabase
-                .from('profiles')
-                .update(updates)
-                .eq('id', user.id)
-
-            if (error) throw error
-
-            setProfile(prev => prev ? { ...prev, ...updates } : null)
+            const res = await fetch('/api/profile', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(updates),
+            })
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({ error: 'Unknown error' }))
+                throw new Error(err.error || 'Failed to update profile')
+            }
+            const updated: Profile = await res.json()
+            setProfile(updated)
         } catch (error) {
             console.error('Error updating profile:', error)
             throw error
         }
     }
 
+    const refreshProfile = async () => {
+        await fetchProfile()
+    }
+
     return (
-        <AuthContext.Provider value={{ user, profile, loading, signOut, updateProfile }}>
+        <AuthContext.Provider value={{ user, profile, loading, signOut, updateProfile, refreshProfile }}>
             {children}
         </AuthContext.Provider>
     )
